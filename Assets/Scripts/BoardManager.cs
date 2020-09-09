@@ -11,12 +11,12 @@ public class BoardManager : MonoBehaviour
     [Range(1,12)]
     public int numberOfRows;
 
-    [Range(0, 10)]
+    [Range(0, 100)]
     public float marginX;
-    [Range(0,10)]
+    [Range(0,100)]
     public float marginY;
 
-    [Range(0,1)]
+    [Range(0,100)]
     public float cellPadding;
 
     public Camera cam;
@@ -132,15 +132,9 @@ public class BoardManager : MonoBehaviour
         for(int row = tappedHeight; row < tappedHeight + Mathf.Ceil((numberOfRows - tappedHeight)/2f); row++) {
             Tile a = grid[tapped.Index.x, row];
             Tile b = grid[tapped.Index.x, numberOfRows - 1 - row + tappedHeight];
-            Debug.Log("Tile A: " + a + " Tile B: " + b);
-            grid[tapped.Index.x, row] = b;
-            grid[tapped.Index.x, numberOfRows - 1 - row + tappedHeight] = a;
             SwapTiles(ref a, ref b);
-            Debug.Log("Swapped Tile A: " + a + " Swapped Tile B: " + b);
-
 
             rotatingTiles.Add(a);
-        
             if(a != b)
                 rotatingTiles.Add(b);
             
@@ -171,17 +165,26 @@ public class BoardManager : MonoBehaviour
 
     private IEnumerator RotateStack(List<Tile> tiles, Vector3 center, float degrees, float duration) {
 
-        float startTime = Time.time;
-        float endTime = startTime + duration;
         foreach(Tile tile in tiles) {
             tile.transform.Translate(Vector3.forward * -100);
-        }
-        yield return null;
-        while(Time.time < endTime) {
-            foreach(Tile tile in tiles) {
-                tile.transform.RotateAround(center, Vector3.forward, Time.deltaTime * (degrees/duration));
-            }
             yield return null;
+        }
+        yield return new WaitForSeconds(.1f);
+
+        if(tiles.Count > 1) {
+            float totalDegrees = 0;
+            float startTime = Time.time;
+            float endTime = startTime + duration;
+            while(Time.time < endTime || totalDegrees < degrees) {
+                foreach(Tile tile in tiles) {
+                    float rotationThisFrame = Time.deltaTime * degrees / duration;
+                    totalDegrees += Mathf.Abs(rotationThisFrame);
+                    tile.transform.RotateAround(center, Vector3.forward, rotationThisFrame);
+                    // tile.transform.rotation = Quaternion.identity;
+                }
+                yield return null;
+            }
+            yield return new WaitForSeconds(.1f);
         }
         foreach(Tile tile in tiles) {
             tile.transform.rotation = Quaternion.identity;
@@ -193,27 +196,55 @@ public class BoardManager : MonoBehaviour
     
 
     private IEnumerator RotateGrid(SwipeInfo.SwipeDirection direction) {
+
+        List<Tile> rotatingTiles = new List<Tile>();
+
         if(direction == SwipeInfo.SwipeDirection.LEFT) {
             for(int i = 0; i < numberOfColumns/2; i++) {
                 for(int j = i; j < numberOfRows - i - 1; j++) {
-                    Color temp = grid[i,j].GetColor();
-                    grid[i,j].SetColor(grid[j,numberOfRows - i - 1].GetColor());
-                    grid[j,numberOfRows - i - 1].SetColor(grid[numberOfColumns - i - 1, numberOfRows - j - 1].GetColor());
-                    grid[numberOfColumns - i - 1, numberOfRows - j - 1].SetColor(grid[numberOfRows - j - 1, i].GetColor());
-                    grid[numberOfRows - j - 1, i].SetColor(temp);
+                    Tile temp = grid[i,j];
+                    grid[i,j] = grid[j,numberOfRows - i - 1];
+                    grid[j,numberOfRows - i - 1] = grid[numberOfColumns - i - 1, numberOfRows - j - 1];
+                    grid[numberOfColumns - i - 1, numberOfRows - j - 1] = grid[numberOfRows - j - 1, i];
+                    grid[numberOfRows - j - 1, i] = temp;
+
+                    grid[i,j].Index = new Vector2Int(i,j);
+                    grid[j,numberOfRows - i - 1].Index = new Vector2Int(j, numberOfRows - i - 1);
+                    grid[numberOfColumns - i - 1, numberOfRows - j - 1].Index = new Vector2Int(numberOfColumns - i -1, numberOfRows -j -1);
+                    grid[numberOfRows - j - 1, i].Index = new Vector2Int(numberOfRows - j -1, i);
+
+                    rotatingTiles.Add(grid[i,j]);
+                    rotatingTiles.Add(grid[j,numberOfRows - i - 1]);
+                    rotatingTiles.Add(grid[numberOfColumns - i - 1, numberOfRows - j - 1]);
+                    rotatingTiles.Add(grid[numberOfRows - j - 1, i]);
                 }
             }
         } else if(direction == SwipeInfo.SwipeDirection.RIGHT) {
+            Debug.Log("rotating right");
             for(int i = 0; i < numberOfColumns/2; i++) {
                 for(int j = i; j < numberOfRows - i - 1; j++) {
-                    Color temp = grid[i,j].GetColor();
-                    grid[i,j].SetColor(grid[numberOfRows - j - 1, i].GetColor());
-                    grid[numberOfRows - j - 1, i].SetColor(grid[numberOfColumns - i - 1, numberOfRows - j - 1].GetColor());
-                    grid[numberOfColumns - i - 1, numberOfRows - j - 1].SetColor(grid[j,numberOfRows - i - 1].GetColor());
-                    grid[j, numberOfRows -i -1].SetColor(temp);
+                    Tile temp = grid[i,j];
+                    grid[i,j] = grid[numberOfRows - j - 1, i];
+                    grid[numberOfRows - j - 1, i] = grid[numberOfColumns - i - 1, numberOfRows - j - 1];
+                    grid[numberOfColumns - i - 1, numberOfRows - j - 1] = grid[j,numberOfRows - i - 1];
+                    grid[j, numberOfRows -i -1] = temp;
+
+                    grid[i,j].Index = new Vector2Int(i,j);
+                    grid[j,numberOfRows - i - 1].Index = new Vector2Int(j, numberOfRows - i - 1);
+                    grid[numberOfColumns - i - 1, numberOfRows - j - 1].Index = new Vector2Int(numberOfColumns - i -1, numberOfRows -j -1);
+                    grid[numberOfRows - j - 1, i].Index = new Vector2Int(numberOfRows - j -1, i);
+
+                    rotatingTiles.Add(grid[i,j]);
+                    rotatingTiles.Add(grid[j,numberOfRows - i - 1]);
+                    rotatingTiles.Add(grid[numberOfColumns - i - 1, numberOfRows - j - 1]);
+                    rotatingTiles.Add(grid[numberOfRows - j - 1, i]);
+
                 }
             }
         }
+        yield return RotateStack(rotatingTiles, GetBoardCenter(), direction == SwipeInfo.SwipeDirection.LEFT ? 90 : -90, .5f);
+        
+
         rotatingGrid = false;
         yield return null;
     }
@@ -325,6 +356,8 @@ public class BoardManager : MonoBehaviour
         Vector2Int tempIndex = a.Index;
         a.Index = b.Index;
         b.Index = tempIndex;
+        grid[a.Index.x, a.Index.y] = a;
+        grid[b.Index.x, b.Index.y] = b;
     }
 
     private void Update() {
@@ -397,6 +430,10 @@ public class BoardManager : MonoBehaviour
         float cellLength = dimensionLength / totalNumber;
         float cellCenter = minimum + cellLength / 2;
         return cellCenter + cellLength * i;
+    }
+    
+    private Vector3 GetBoardCenter() {
+        return grid[0,0].Position + (grid[numberOfColumns -1, numberOfRows -1].Position - grid[0,0].Position)/2;
     }
 
 }
