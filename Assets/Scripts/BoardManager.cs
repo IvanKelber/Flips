@@ -19,10 +19,21 @@ public class BoardManager : MonoBehaviour
     [Range(0,100)]
     public float cellPadding;
 
+    [SerializeField]
+    private bool maintainOrientation = false;
+
+    [SerializeField, Range(.01f,1)]
+    private float stackRotationDuration = .1f;
+
+    [SerializeField, Range(.01f,1)]
+    private float gridRotationDuration = .1f;
+
+
     public Camera cam;
 
     public Tile[,] grid;
 
+    
     private float cellWidth;
     private float cellHeight;
 
@@ -36,10 +47,9 @@ public class BoardManager : MonoBehaviour
 
     private void Awake()
     {
-        RenderBoard();
-
         Gestures.OnSwipe += HandleSwipe;
-        Gestures.SwipeEnded += EndSwipe;
+
+        RenderBoard();
     }
 
     private void RenderBoard() {
@@ -139,8 +149,7 @@ public class BoardManager : MonoBehaviour
                 rotatingTiles.Add(b);
             
         }
-        // yield return null;
-        yield return StartCoroutine(RotateStack(rotatingTiles, center, 180, .5f));
+        yield return StartCoroutine(RotateStack(rotatingTiles, center, 180, stackRotationDuration));
 
         List<List<Tile>> matches = CheckForMatches();
         if(matches.Count > 0) {
@@ -167,7 +176,6 @@ public class BoardManager : MonoBehaviour
 
         foreach(Tile tile in tiles) {
             tile.transform.Translate(Vector3.forward * -100);
-            yield return null;
         }
         yield return new WaitForSeconds(.1f);
 
@@ -180,7 +188,8 @@ public class BoardManager : MonoBehaviour
                     float rotationThisFrame = Time.deltaTime * degrees / duration;
                     totalDegrees += Mathf.Abs(rotationThisFrame);
                     tile.transform.RotateAround(center, Vector3.forward, rotationThisFrame);
-                    // tile.transform.rotation = Quaternion.identity;
+                    if(maintainOrientation)
+                        tile.transform.rotation = Quaternion.identity;
                 }
                 yield return null;
             }
@@ -220,7 +229,6 @@ public class BoardManager : MonoBehaviour
                 }
             }
         } else if(direction == SwipeInfo.SwipeDirection.RIGHT) {
-            Debug.Log("rotating right");
             for(int i = 0; i < numberOfColumns/2; i++) {
                 for(int j = i; j < numberOfRows - i - 1; j++) {
                     Tile temp = grid[i,j];
@@ -242,7 +250,7 @@ public class BoardManager : MonoBehaviour
                 }
             }
         }
-        yield return RotateStack(rotatingTiles, GetBoardCenter(), direction == SwipeInfo.SwipeDirection.LEFT ? 90 : -90, .5f);
+        yield return RotateStack(rotatingTiles, GetBoardCenter(), direction == SwipeInfo.SwipeDirection.LEFT ? 90 : -90, gridRotationDuration);
         
 
         rotatingGrid = false;
@@ -364,11 +372,11 @@ public class BoardManager : MonoBehaviour
         if(Input.GetKeyDown(KeyCode.Space)) {
             RenderBoard();
         }
-        if(Input.GetKeyDown(KeyCode.LeftArrow)) {
+        if(Input.GetKeyDown(KeyCode.LeftArrow)&& !rotatingGrid) {
             rotatingGrid = true;
             StartCoroutine(RotateGrid(SwipeInfo.SwipeDirection.LEFT));
         }
-        if(Input.GetKeyDown(KeyCode.RightArrow)) {
+        if(Input.GetKeyDown(KeyCode.RightArrow) && !rotatingGrid) {
             rotatingGrid = true;
             StartCoroutine(RotateGrid(SwipeInfo.SwipeDirection.RIGHT));
         }
@@ -394,13 +402,10 @@ public class BoardManager : MonoBehaviour
             return;
         }
 
-
-        rotatingGrid = true;
-        StartCoroutine(RotateGrid(swipe.Direction));
-    }
-    
-    public void EndSwipe() {
-        rotatingGrid = false;
+        if(!rotatingGrid) {
+            rotatingGrid = true;
+            StartCoroutine(RotateGrid(swipe.Direction));
+        }
     }
 
     public Vector3 GetPosition(int column, int row) {
