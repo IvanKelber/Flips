@@ -55,7 +55,7 @@ public class BoardManager : MonoBehaviour
 
     private bool Busy {
         get {
-            return rotatingGrid && reversingStack && handlingMatchChains;
+            return rotatingGrid || reversingStack || handlingMatchChains;
         }
     }
 
@@ -218,6 +218,7 @@ public class BoardManager : MonoBehaviour
     }
 
     private IEnumerator RotateStack(List<Tile> tiles, Vector3 center, float degrees, float duration) {
+
         float startMoving = Time.time;
         float endMoving = startMoving + .15f;
         while(Time.time < endMoving) {
