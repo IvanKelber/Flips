@@ -4,7 +4,8 @@ using UnityEngine;
 
 public class BoardManager : MonoBehaviour
 {
-    public Color[] colors;
+    public Color[] colorsManifest;
+    public int numberOfColors;
 
     [Range(1, 12)]
     public int numberOfColumns;
@@ -45,10 +46,24 @@ public class BoardManager : MonoBehaviour
     private bool rotatingGrid = false;
     private bool reversingStack = false;
 
+    private bool handlingMatchChains = false;
+
+    [SerializeField]
+    private AudioManager SFXManager;
+
+    private AudioSource audioSource;
+
+    private bool Busy {
+        get {
+            return rotatingGrid && reversingStack && handlingMatchChains;
+        }
+    }
+
     private void Awake()
     {
         Gestures.OnSwipe += HandleSwipe;
-
+        audioSource = GetComponent<AudioSource>();
+        numberOfColors = Mathf.Clamp(numberOfColors, 0, colorsManifest.Length);
         RenderBoard();
     }
 
@@ -82,22 +97,56 @@ public class BoardManager : MonoBehaviour
         grid = InitializeGrid();
         RandomizeBoard();
 
+        StartCoroutine(HandleMatchChains());
+    }
+
+    private IEnumerator HandleMatchChains() {
+        handlingMatchChains = true;
         List<List<Tile>> matches = CheckForMatches();
+
         while(matches.Count > 0) {
-            List<Vector2Int> newTiles = new List<Vector2Int>();
+            yield return new WaitForSeconds(.3f);
+            HashSet<int> affectedColumns = new HashSet<int>();
             foreach(List<Tile> match in matches) {
                 foreach(Tile tile in match) {
-                    Debug.Log(" Tile: " + tile);
-                    newTiles.Add(tile.Index);
-                    tile.SetColor(new Color(0,0,0,0));
+                    affectedColumns.Add(tile.Index.x);
+                    grid[tile.Index.x, tile.Index.y] = null;
+                    tile.Destroy();
                 }
+                yield return SFXManager.PlayAndWait("Pop", audioSource);
             };
+            yield return new WaitForSeconds(.3f);
 
-            foreach(Vector2Int index in newTiles) {
-                grid[index.x, index.y].SetColor(RandomColor());
+            foreach(int column in affectedColumns) {
+                int shiftCount = 0;
+                for(int row = 0; row < numberOfRows; row++) {
+                    if(grid[column, row] == null) {
+                        shiftCount++;
+                    } else if(shiftCount > 0) {
+                        grid[column, row - shiftCount] = grid[column,row];
+                        grid[column, row - shiftCount].Index = new Vector2Int(column, row - shiftCount);
+                        StartCoroutine(RepositionTile(grid[column,row - shiftCount], .2f));
+
+                        grid[column, row] = null;
+                    }
+                }
+                yield return SFXManager.PlayAndWait("Clack", audioSource);
+
             }
+            yield return new WaitForSeconds(.3f);
+            foreach(int column in affectedColumns) {
+                int row = numberOfRows - 1;
+                while(grid[column,row] == null) {
+                    grid[column,row] = RenderTile(column, row, cellWidth, cellHeight, RandomColor());
+                    row--;
+                }
+            }
+
             matches = CheckForMatches();
         }
+        SFXManager.Reset("Pop");
+        handlingMatchChains = false;
+        yield return null;
     }
 
     private Tile[,] InitializeGrid() {
@@ -125,17 +174,30 @@ public class BoardManager : MonoBehaviour
 
     public void HandleTileTapped(Vector2 index) {
         Tile tapped = grid[(int) index.x, (int) index.y];
-        if(!reversingStack) {
+        if(!Busy) {
             StartCoroutine(ReverseStack(tapped));
         } else {
             Debug.Log("still reversingStack");
         }
     }
 
+    private IEnumerator RepositionTile(Tile tile, float duration) {
+        Vector3 endPosition = CalculateGamePosition(tile.Index.x, tile.Index.y, cameraBounds);
+        float step = Mathf.Abs(endPosition.y - tile.Position.y)/duration;
+
+        float startTime = Time.time;
+        float endTime = startTime + duration;
+
+        while(Time.time < endTime) {
+            tile.transform.Translate(Vector3.down * Time.deltaTime * step);
+            yield return null;
+        }
+        tile.transform.position = endPosition;
+    }
+
     private IEnumerator ReverseStack(Tile tapped) {
         reversingStack = true;
         Vector3 center = new Vector3(tapped.Position.x, tapped.Position.y + (grid[tapped.Index.x, numberOfRows -1].Position.y - tapped.Position.y)/2, tapped.Position.z);
-        Debug.Log("Finding center: " + center);
 
         int tappedHeight = tapped.Index.y;
         List<Tile> rotatingTiles = new List<Tile>();
@@ -150,32 +212,19 @@ public class BoardManager : MonoBehaviour
             
         }
         yield return StartCoroutine(RotateStack(rotatingTiles, center, 180, stackRotationDuration));
+        yield return HandleMatchChains();
 
-        List<List<Tile>> matches = CheckForMatches();
-        if(matches.Count > 0) {
-            yield return new WaitForSeconds(.5f);
-            List<Vector2Int> newTiles = new List<Vector2Int>();
-            foreach(List<Tile> match in matches) {
-                foreach(Tile tile in match) {
-                    Debug.Log(" Tile: " + tile);
-                    newTiles.Add(tile.Index);
-                    tile.SetColor(new Color(1,1,1,0));
-                }
-                yield return new WaitForSeconds(.3f);
-            };
-            yield return new WaitForSeconds(.5f);
-
-            foreach(Vector2Int index in newTiles) {
-                grid[index.x, index.y].SetColor(RandomColor());
-            }
-        }
         reversingStack = false;
     }
 
     private IEnumerator RotateStack(List<Tile> tiles, Vector3 center, float degrees, float duration) {
-
-        foreach(Tile tile in tiles) {
-            tile.transform.Translate(Vector3.forward * -100);
+        float startMoving = Time.time;
+        float endMoving = startMoving + .15f;
+        while(Time.time < endMoving) {
+            foreach(Tile tile in tiles) {
+                tile.transform.Translate(Vector3.forward * Time.deltaTime * -50/duration);
+            }
+            yield return null;
         }
         yield return new WaitForSeconds(.1f);
 
@@ -185,6 +234,7 @@ public class BoardManager : MonoBehaviour
             float endTime = startTime + duration;
             while(Time.time < endTime || totalDegrees < degrees) {
                 foreach(Tile tile in tiles) {
+
                     float rotationThisFrame = Time.deltaTime * degrees / duration;
                     totalDegrees += Mathf.Abs(rotationThisFrame);
                     tile.transform.RotateAround(center, Vector3.forward, rotationThisFrame);
@@ -193,6 +243,8 @@ public class BoardManager : MonoBehaviour
                 }
                 yield return null;
             }
+            SFXManager.Play("Rotate", audioSource);
+
             yield return new WaitForSeconds(.1f);
         }
         foreach(Tile tile in tiles) {
@@ -208,7 +260,7 @@ public class BoardManager : MonoBehaviour
 
         List<Tile> rotatingTiles = new List<Tile>();
 
-        if(direction == SwipeInfo.SwipeDirection.LEFT) {
+        if(direction == SwipeInfo.SwipeDirection.RIGHT) {
             for(int i = 0; i < numberOfColumns/2; i++) {
                 for(int j = i; j < numberOfRows - i - 1; j++) {
                     Tile temp = grid[i,j];
@@ -228,7 +280,7 @@ public class BoardManager : MonoBehaviour
                     rotatingTiles.Add(grid[numberOfRows - j - 1, i]);
                 }
             }
-        } else if(direction == SwipeInfo.SwipeDirection.RIGHT) {
+        } else if(direction == SwipeInfo.SwipeDirection.LEFT) {
             for(int i = 0; i < numberOfColumns/2; i++) {
                 for(int j = i; j < numberOfRows - i - 1; j++) {
                     Tile temp = grid[i,j];
@@ -250,7 +302,7 @@ public class BoardManager : MonoBehaviour
                 }
             }
         }
-        yield return RotateStack(rotatingTiles, GetBoardCenter(), direction == SwipeInfo.SwipeDirection.LEFT ? 90 : -90, gridRotationDuration);
+        yield return RotateStack(rotatingTiles, GetBoardCenter(), direction == SwipeInfo.SwipeDirection.RIGHT ? 90 : -90, gridRotationDuration);
         
 
         rotatingGrid = false;
@@ -318,20 +370,12 @@ public class BoardManager : MonoBehaviour
 
         foreach(int col in columns.Keys) {
             if(columns[col].Count >= 3) {
-                Debug.Log("Found a matching column");
-                foreach(Tile tile in columns[col]) {
-                    Debug.Log(tile);
-                }
                 matchTiles.AddRange(columns[col]);
             }
         }
 
         foreach(int row in rows.Keys) {
             if(rows[row].Count >= 3) {
-                Debug.Log("Found a matching row");
-                foreach(Tile tile in rows[row]) {
-                    Debug.Log(tile);
-                }
                 matchTiles.AddRange(rows[row]);
             }
         }
@@ -372,11 +416,11 @@ public class BoardManager : MonoBehaviour
         if(Input.GetKeyDown(KeyCode.Space)) {
             RenderBoard();
         }
-        if(Input.GetKeyDown(KeyCode.LeftArrow)&& !rotatingGrid) {
+        if(Input.GetKeyDown(KeyCode.LeftArrow)&& !Busy) {
             rotatingGrid = true;
             StartCoroutine(RotateGrid(SwipeInfo.SwipeDirection.LEFT));
         }
-        if(Input.GetKeyDown(KeyCode.RightArrow) && !rotatingGrid) {
+        if(Input.GetKeyDown(KeyCode.RightArrow) && !Busy) {
             rotatingGrid = true;
             StartCoroutine(RotateGrid(SwipeInfo.SwipeDirection.RIGHT));
         }
@@ -391,18 +435,18 @@ public class BoardManager : MonoBehaviour
     }
 
     private Color RandomColor() {
-        return colors[Random.Range(0, colors.Length)];
+        return colorsManifest[Random.Range(0, numberOfColors)];
     }
 
     public void HandleSwipe(SwipeInfo swipe)
     {
-        if (rotatingGrid ||
+        if (Busy ||
            swipe.Direction == SwipeInfo.SwipeDirection.UP || swipe.Direction == SwipeInfo.SwipeDirection.DOWN)
         {
             return;
         }
 
-        if(!rotatingGrid) {
+        if(!Busy) {
             rotatingGrid = true;
             StartCoroutine(RotateGrid(swipe.Direction));
         }
@@ -439,6 +483,19 @@ public class BoardManager : MonoBehaviour
     
     private Vector3 GetBoardCenter() {
         return grid[0,0].Position + (grid[numberOfColumns -1, numberOfRows -1].Position - grid[0,0].Position)/2;
+    }
+
+    private void OnDrawGizmos() {
+        if(grid != null) {
+            Gizmos.color = new Color(.8f, 0, 0, .5f);
+            for(int col = 0; col < numberOfColumns; col++) {
+                for(int row = 0; row < numberOfRows; row++) {
+                    if(grid[col,row] == null) {
+                        Gizmos.DrawCube(CalculateGamePosition(col, row, cameraBounds), new Vector3(cellWidth, cellHeight, 1));
+                    }
+                }
+            }
+        }
     }
 
 }

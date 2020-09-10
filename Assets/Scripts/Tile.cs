@@ -37,11 +37,19 @@ public class Tile : MonoBehaviour
     }
 
     public Material material;
+
+    [HideInInspector]
+    public AudioSource audioSource;
+
     private void Awake()
     {
         meshRenderer = gameObject.AddComponent<MeshRenderer>();
         meshFilter = gameObject.AddComponent<MeshFilter>();
         collider = gameObject.AddComponent<BoxCollider>();
+        audioSource = GetComponent<AudioSource>();
+        if(audioSource == null) {
+            Debug.LogWarning("Audio source is not attached to tile prefab");
+        }
     }
 
     public void Initialize(float cellWidth, float cellHeight, Color color, Vector2Int index) {
