@@ -136,7 +136,7 @@ public class BoardManager : MonoBehaviour
             yield return new WaitForSeconds(.3f);
             foreach(int column in affectedColumns) {
                 int row = numberOfRows - 1;
-                while(grid[column,row] == null) {
+                while(row >= 0 && grid[column,row] == null) {
                     grid[column,row] = RenderTile(column, row, cellWidth, cellHeight, RandomColor());
                     row--;
                 }

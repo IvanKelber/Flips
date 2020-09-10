@@ -10,8 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a1c52ffb794c645e6800442e8d6e1e60, type: 3}
-  m_Name: Rotate
+  m_Name: RotateAudio
   m_EditorClassIdentifier: 
-  Name: 
-  clip: {fileID: 0}
-  modulation: 0
+  Name: Rotate
+  clip: {fileID: 8300000, guid: 187b80473791749b7afc56fad25b1d98, type: 3}
+  volume: 1
+  modulation: -0.62

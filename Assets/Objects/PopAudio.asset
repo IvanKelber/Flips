@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 059c480b7471e46d4a6a07471ab45294, type: 3}
   m_Name: PopAudio
   m_EditorClassIdentifier: 
-  Name: 
-  clip: {fileID: 0}
-  volume: 0
+  Name: Pop
+  clip: {fileID: 8300000, guid: ad2d8f9a08fb04d24b3436bc4c3579a7, type: 3}
+  volume: 1
   modulation: 0
-  increment: 0
+  increment: 0.1
