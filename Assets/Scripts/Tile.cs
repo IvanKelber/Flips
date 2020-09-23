@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using ScriptableObjectArchitecture;
 
-public class Tile : MonoBehaviour
+public class Tile : MonoBehaviour, ITappable
 {
 
     private Color color = Color.white;
@@ -130,7 +130,7 @@ public class Tile : MonoBehaviour
         return tris;
     }
 
-    private void OnMouseDown() {
+    public void OnTap() {
         onTapped.Raise(new Vector2(Index.x, Index.y));
     }
 

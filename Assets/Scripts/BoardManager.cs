@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class BoardManager : MonoBehaviour
+public class BoardManager : MonoBehaviour, ISwipeable
 {
     public Color[] colorsManifest;
     public int numberOfColors;
@@ -52,6 +52,7 @@ public class BoardManager : MonoBehaviour
     private AudioManager SFXManager;
 
     private AudioSource audioSource;
+    private BoxCollider collider;
 
     private bool Busy {
         get {
@@ -61,11 +62,12 @@ public class BoardManager : MonoBehaviour
 
     private void Awake()
     {
-        Gestures.OnSwipe += HandleSwipe;
         audioSource = GetComponent<AudioSource>();
         numberOfColors = Mathf.Clamp(numberOfColors, 0, colorsManifest.Length);
+        collider = gameObject.AddComponent<BoxCollider>();
         RenderBoard();
     }
+
 
     private void RenderBoard() {
 
@@ -96,7 +98,8 @@ public class BoardManager : MonoBehaviour
         cameraBounds = new Bounds(cam.transform.position, new Vector3(screenWidth, screenHeight, 0));
         grid = InitializeGrid();
         RandomizeBoard();
-
+        collider.center = GetBoardCenter();
+        collider.size = new Vector3(frustumWidth, frustumHeight, 1);
         StartCoroutine(HandleMatchChains());
     }
 
@@ -113,12 +116,14 @@ public class BoardManager : MonoBehaviour
                     grid[tile.Index.x, tile.Index.y] = null;
                     tile.Destroy();
                 }
+                yield return new WaitForSeconds(.2f);
                 yield return SFXManager.PlayAndWait("Pop", audioSource);
             };
             yield return new WaitForSeconds(.3f);
 
             foreach(int column in affectedColumns) {
                 int shiftCount = 0;
+                bool topNull = grid[column, numberOfRows -1] == null;
                 for(int row = 0; row < numberOfRows; row++) {
                     if(grid[column, row] == null) {
                         shiftCount++;
@@ -130,7 +135,8 @@ public class BoardManager : MonoBehaviour
                         grid[column, row] = null;
                     }
                 }
-                yield return SFXManager.PlayAndWait("Clack", audioSource);
+                if(!topNull)
+                    yield return SFXManager.PlayAndWait("Clack", audioSource);
 
             }
             yield return new WaitForSeconds(.3f);
@@ -439,7 +445,7 @@ public class BoardManager : MonoBehaviour
         return colorsManifest[Random.Range(0, numberOfColors)];
     }
 
-    public void HandleSwipe(SwipeInfo swipe)
+    public void OnSwipe(SwipeInfo swipe)
     {
         if (Busy ||
            swipe.Direction == SwipeInfo.SwipeDirection.UP || swipe.Direction == SwipeInfo.SwipeDirection.DOWN)
@@ -448,6 +454,14 @@ public class BoardManager : MonoBehaviour
         }
 
         if(!Busy) {
+            Debug.Log("StartPosition: " + swipe.StartPosition + "\nEndPosition: " + swipe.EndPosition + "\nColliderCenter: " + collider.center);
+            Debug.Log("StartPosition: " + swipe.GetStartInWorld(cam) + "\nEndPosition: " + swipe.GetEndInWorld(cam));
+
+            if(swipe.GetStartInWorld(cam).y > collider.center.y && 
+                 swipe.GetEndInWorld(cam).y > collider.center.y) {
+                Debug.Log("Reversing direction");
+                swipe.Direction = SwipeInfo.ReverseDirection(swipe.Direction);
+            }
             rotatingGrid = true;
             StartCoroutine(RotateGrid(swipe.Direction));
         }
